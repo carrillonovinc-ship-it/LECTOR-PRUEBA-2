@@ -1,0 +1,1006 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#243b63">
+
+  <title>OMR PRO | Sistema de evaluación</title>
+
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+  <style>
+    :root {
+      --azul: #243b63;
+      --azul-claro: #eaf0fa;
+      --verde: #087443;
+      --rojo: #b42318;
+      --fondo: #f3f6fb;
+      --borde: #d8e0ec;
+      --texto: #192438;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--texto);
+      background: var(--fondo);
+    }
+
+    main {
+      max-width: 920px;
+      margin: auto;
+    }
+
+    header {
+      background: var(--azul);
+      color: white;
+      padding: 22px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 27px;
+    }
+
+    header p { margin: 0; line-height: 1.5; }
+
+    .panel {
+      background: white;
+      border: 1px solid var(--borde);
+      border-radius: 12px;
+      padding: 18px;
+      margin: 14px 0;
+      box-shadow: 0 3px 12px #1720330a;
+    }
+
+    h2 {
+      font-size: 19px;
+      margin: 0 0 12px;
+      color: var(--azul);
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin: 12px 0 6px;
+    }
+
+    input, select, button {
+      width: 100%;
+      min-height: 43px;
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    input, select {
+      padding: 10px;
+      border: 1px solid #bac6d8;
+      background: white;
+      color: var(--texto);
+    }
+
+    button {
+      padding: 11px 14px;
+      border: none;
+      background: var(--azul);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 9px;
+    }
+
+    button:hover:not(:disabled) { filter: brightness(1.12); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    button.secundario { background: #52647f; }
+    button.verde { background: var(--verde); }
+    button.rojo { background: var(--rojo); }
+
+    .fila-botones {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .estado {
+      padding: 13px;
+      border-radius: 8px;
+      background: var(--azul-claro);
+      border: 1px solid var(--borde);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .estado.error {
+      color: var(--rojo);
+      background: #fff0ef;
+      border-color: #f0b8b4;
+    }
+
+    .estado.exito {
+      color: #075c36;
+      background: #e8f7ef;
+      border-color: #a6ddbd;
+    }
+
+    video, #vistaImagen {
+      display: block;
+      width: 100%;
+      max-height: 560px;
+      object-fit: contain;
+      margin-top: 12px;
+      border-radius: 8px;
+      background: #111827;
+    }
+
+    #lienzo { display: none; }
+
+    .rejilla-respuestas {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .respuesta {
+      border: 1px solid var(--borde);
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .respuesta label { margin: 0 0 8px; }
+
+    .ayuda {
+      color: #526078;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .indicador {
+      display: inline-block;
+      border-radius: 30px;
+      padding: 5px 10px;
+      background: #e7edf7;
+      color: var(--azul);
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    footer {
+      text-align: center;
+      color: #657189;
+      font-size: 12px;
+      padding: 18px;
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 8px; }
+      .panel { padding: 13px; }
+      .fila-botones, .rejilla-respuestas { grid-template-columns: 1fr; }
+      header h1 { font-size: 23px; }
+    }
+  </style>
+</head>
+
+<body>
+<main>
+  <header>
+    <h1>OMR PRO</h1>
+    <p>Sistema de lectura QR, reconocimiento de respuestas y registro de notas.</p>
+  </header>
+
+  <section class="panel">
+    <h2>1. Conexión con Google Sheets</h2>
+    <span class="indicador">Apps Script configurado</span>
+
+    <label for="apiUrl">URL de la aplicación web</label>
+    <input
+      id="apiUrl"
+      type="url"
+      value="https://script.google.com/macros/s/AKfycbzZqJogAMOCzZ8fS-MEi5cCNHZHKbKY4tngV7X548oDa2J3_C9hfdggd2J3ne1Qc7og4g/exec"
+      autocomplete="url"
+    >
+
+    <button id="probarConexion" class="secundario">
+      Comprobar conexión
+    </button>
+
+    <p class="ayuda">
+      La conexión requiere que la implementación de Apps Script esté publicada,
+      autorizada y tenga el código servidor compatible con esta página.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Capturar la hoja del examen</h2>
+
+    <div class="fila-botones">
+      <button id="activarCamara">Activar cámara</button>
+      <button id="capturar" class="secundario" disabled>
+        Capturar fotografía
+      </button>
+    </div>
+
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="lienzo"></canvas>
+    <img id="vistaImagen" alt="Fotografía del examen" hidden>
+
+    <label for="archivo">O cargar una fotografía</label>
+    <input id="archivo" type="file" accept="image/*">
+
+    <div class="fila-botones">
+      <button id="leerQR" class="secundario">Leer código QR</button>
+      <button id="leerOMR" class="secundario">Detectar burbujas</button>
+    </div>
+
+    <p class="ayuda">
+      Coloca toda la hoja dentro de la imagen, con buena iluminación,
+      sin sombras y con el código QR visible.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>3. Información del estudiante y examen</h2>
+
+    <label for="qr">Contenido del código QR</label>
+    <input
+      id="qr"
+      type="text"
+      placeholder="RUDE|CURSO|CODIGO|COLUMNA"
+      autocomplete="off"
+    >
+
+    <p class="ayuda">
+      Formato esperado: <b>RUDE|CURSO|CODIGO|COLUMNA</b>.
+      Ejemplo ilustrativo: <code>12345|3ro A FIS|EX01|BP</code>.
+      Utiliza los datos reales configurados en tu sistema.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>4. Revisar las respuestas</h2>
+
+    <p class="ayuda">
+      Selecciona la respuesta de cada pregunta. La lectura automática es
+      una ayuda y debes verificar las marcas antes de calcular.
+    </p>
+
+    <div id="respuestas" class="rejilla-respuestas"></div>
+
+    <div class="fila-botones">
+      <button id="limpiar" class="secundario">Limpiar respuestas</button>
+      <button id="calcular">Calcular nota</button>
+    </div>
+
+    <button id="guardar" class="verde" disabled>
+      Confirmar y guardar nota
+    </button>
+  </section>
+
+  <section class="panel">
+    <h2>5. Resultado de la corrección</h2>
+    <div id="resultado" class="estado" role="status" aria-live="polite">
+      Sistema preparado. Captura una imagen o introduce los datos para comenzar.
+    </div>
+  </section>
+
+  <footer>
+    OMR PRO · Revisa las respuestas y el resultado antes de guardar notas.
+  </footer>
+</main>
+
+<script>
+'use strict';
+
+/* =========================================================
+   CONFIGURACIÓN
+   ========================================================= */
+
+const TOTAL_PREGUNTAS = 10;
+const OPCIONES = ['A', 'B', 'C', 'D'];
+
+let streamCamara = null;
+let imagenCargada = false;
+let calculoPendiente = null;
+let solicitudActiva = false;
+let contadorSolicitud = 0;
+
+/* =========================================================
+   ELEMENTOS Y RESPUESTAS
+   ========================================================= */
+
+const $ = id => document.getElementById(id);
+
+function crearSelectores() {
+  const contenedor = $('respuestas');
+  contenedor.replaceChildren();
+
+  for (let i = 0; i < TOTAL_PREGUNTAS; i++) {
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'respuesta';
+
+    const etiqueta = document.createElement('label');
+    etiqueta.htmlFor = 'respuesta' + i;
+    etiqueta.textContent = 'Pregunta ' + (i + 1);
+
+    const select = document.createElement('select');
+    select.id = 'respuesta' + i;
+    select.setAttribute('aria-label', 'Respuesta de la pregunta ' + (i + 1));
+
+    const vacia = document.createElement('option');
+    vacia.value = '';
+    vacia.textContent = 'Sin marcar / revisar';
+    select.appendChild(vacia);
+
+    OPCIONES.forEach(letra => {
+      const opcion = document.createElement('option');
+      opcion.value = letra;
+      opcion.textContent = letra;
+      select.appendChild(opcion);
+    });
+
+    select.addEventListener('change', invalidarCalculo);
+
+    tarjeta.append(etiqueta, select);
+    contenedor.appendChild(tarjeta);
+  }
+}
+
+function obtenerRespuestas() {
+  return Array.from(
+    { length: TOTAL_PREGUNTAS },
+    (_, i) => $('respuesta' + i).value
+  );
+}
+
+function establecerRespuestas(respuestas) {
+  for (let i = 0; i < TOTAL_PREGUNTAS; i++) {
+    const valor = respuestas[i] || '';
+    $('respuesta' + i).value = OPCIONES.includes(valor) ? valor : '';
+  }
+  invalidarCalculo();
+}
+
+function invalidarCalculo() {
+  calculoPendiente = null;
+  $('guardar').disabled = true;
+}
+
+function mostrarMensaje(texto, tipo = '') {
+  const panel = $('resultado');
+  panel.textContent = texto;
+  panel.className = 'estado' + (tipo ? ' ' + tipo : '');
+}
+
+/* =========================================================
+   VALIDACIÓN DE URL Y API JSONP
+   ========================================================= */
+
+function obtenerURL() {
+  const url = $('apiUrl').value.trim();
+
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(url)) {
+    throw new Error('La URL de Apps Script no es válida.');
+  }
+
+  return url;
+}
+
+function llamarAPI(accion, datosExtra = {}) {
+  return new Promise((resolve, reject) => {
+    if (solicitudActiva) {
+      reject(new Error('Hay otra solicitud en curso. Espera un momento.'));
+      return;
+    }
+
+    let url;
+
+    try {
+      url = obtenerURL();
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    solicitudActiva = true;
+    contadorSolicitud++;
+
+    const nombreCallback =
+      'omrCallback' + Date.now() + '_' + contadorSolicitud;
+
+    const script = document.createElement('script');
+    let finalizada = false;
+
+    const temporizador = setTimeout(() => {
+      terminar(new Error(
+        'Se agotó el tiempo de espera. Comprueba la implementación de Apps Script.'
+      ));
+    }, 30000);
+
+    function terminar(error, datos) {
+      if (finalizada) return;
+      finalizada = true;
+
+      clearTimeout(temporizador);
+      delete window[nombreCallback];
+      script.remove();
+      solicitudActiva = false;
+
+      if (error) reject(error);
+      else resolve(datos);
+    }
+
+    window[nombreCallback] = datos => {
+      if (!datos || typeof datos.ok !== 'boolean') {
+        terminar(new Error('El servidor devolvió una respuesta no reconocida.'));
+        return;
+      }
+
+      if (!datos.ok) {
+        terminar(new Error(datos.mensaje || 'La operación no fue aceptada.'));
+        return;
+      }
+
+      terminar(null, datos);
+    };
+
+    script.onerror = () => {
+      terminar(new Error(
+        'No se pudo contactar con Apps Script. Revisa la URL y los permisos.'
+      ));
+    };
+
+    const payload = {
+      accion: accion,
+      ...datosExtra
+    };
+
+    const parametros = new URLSearchParams({
+      action: 'api',
+      callback: nombreCallback,
+      payload: JSON.stringify(payload)
+    });
+
+    script.src = url + '?' + parametros.toString();
+    document.body.appendChild(script);
+  });
+}
+
+/* =========================================================
+   CONEXIÓN
+   ========================================================= */
+
+$('probarConexion').addEventListener('click', async () => {
+  try {
+    mostrarMensaje(
+      'Comprobando la conexión con Apps Script. Esto no guarda notas…'
+    );
+
+    /*
+      El servidor anterior debe admitir esta acción de diagnóstico
+      para que la prueba responda correctamente.
+    */
+    const respuesta = await llamarAPI('diagnostico');
+
+    mostrarMensaje(
+      respuesta.mensaje || 'Conexión confirmada.',
+      'exito'
+    );
+  } catch (error) {
+    mostrarMensaje(
+      'No se pudo confirmar la conexión.\n' + error.message +
+      '\n\nSi el servidor no admite la acción diagnostico, verifica la URL ' +
+      'abriendo la implementación y revisando su código doGet(e).',
+      'error'
+    );
+  }
+});
+
+/* =========================================================
+   CÁMARA
+   ========================================================= */
+
+$('activarCamara').addEventListener('click', async () => {
+  try {
+    if (!navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia) {
+      throw new Error(
+        'La cámara necesita HTTPS y un navegador compatible.'
+      );
+    }
+
+    detenerCamara();
+
+    streamCamara = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }
+      },
+      audio: false
+    });
+
+    $('video').srcObject = streamCamara;
+    await $('video').play();
+
+    $('capturar').disabled = false;
+    mostrarMensaje('Cámara activada. Encuadra la hoja y captura la fotografía.');
+  } catch (error) {
+    mostrarMensaje(
+      'No se pudo activar la cámara: ' + error.message,
+      'error'
+    );
+  }
+});
+
+function detenerCamara() {
+  if (streamCamara) {
+    streamCamara.getTracks().forEach(pista => pista.stop());
+    streamCamara = null;
+  }
+}
+
+$('capturar').addEventListener('click', () => {
+  const video = $('video');
+
+  if (!video.videoWidth || !video.videoHeight) {
+    mostrarMensaje('Espera hasta que la cámara muestre la imagen.', 'error');
+    return;
+  }
+
+  const canvas = $('lienzo');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  canvas.getContext('2d').drawImage(
+    video, 0, 0, canvas.width, canvas.height
+  );
+
+  imagenCargada = true;
+  $('vistaImagen').hidden = true;
+  invalidarCalculo();
+
+  mostrarMensaje('Fotografía capturada. Puedes leer el QR y revisar el OMR.');
+});
+
+/* =========================================================
+   CARGA DE FOTOGRAFÍA
+   ========================================================= */
+
+$('archivo').addEventListener('change', event => {
+  const archivo = event.target.files && event.target.files[0];
+  if (!archivo) return;
+
+  if (!archivo.type.startsWith('image/')) {
+    mostrarMensaje('Selecciona un archivo de imagen válido.', 'error');
+    return;
+  }
+
+  const urlTemporal = URL.createObjectURL(archivo);
+  const imagen = new Image();
+
+  imagen.onload = () => {
+    const canvas = $('lienzo');
+    canvas.width = imagen.naturalWidth;
+    canvas.height = imagen.naturalHeight;
+
+    canvas.getContext('2d').drawImage(
+      imagen, 0, 0, canvas.width, canvas.height
+    );
+
+    URL.revokeObjectURL(urlTemporal);
+    imagenCargada = true;
+    $('vistaImagen').hidden = true;
+    invalidarCalculo();
+
+    mostrarMensaje('Fotografía cargada correctamente.');
+  };
+
+  imagen.onerror = () => {
+    URL.revokeObjectURL(urlTemporal);
+    mostrarMensaje('No se pudo abrir la fotografía.', 'error');
+  };
+
+  imagen.src = urlTemporal;
+});
+
+/* =========================================================
+   LECTURA DEL QR
+   ========================================================= */
+
+$('leerQR').addEventListener('click', () => {
+  try {
+    if (!imagenCargada) {
+      throw new Error('Primero captura o selecciona una fotografía.');
+    }
+
+    if (typeof window.jsQR !== 'function') {
+      throw new Error('No se cargó la biblioteca jsQR.');
+    }
+
+    const canvas = $('lienzo');
+    const contexto = canvas.getContext('2d');
+    const pixeles = contexto.getImageData(
+      0, 0, canvas.width, canvas.height
+    );
+
+    const codigo = jsQR(
+      pixeles.data,
+      pixeles.width,
+      pixeles.height,
+      { inversionAttempts: 'attemptBoth' }
+    );
+
+    if (!codigo) {
+      throw new Error('No se detectó un código QR legible.');
+    }
+
+    $('qr').value = codigo.data.trim();
+    invalidarCalculo();
+
+    mostrarMensaje('QR leído correctamente:\n' + codigo.data, 'exito');
+  } catch (error) {
+    mostrarMensaje('Error al leer el QR: ' + error.message, 'error');
+  }
+});
+
+$('qr').addEventListener('input', invalidarCalculo);
+
+/* =========================================================
+   LECTURA OMR EXPERIMENTAL
+   IMPORTANTE: 10 FILAS × 4 OPCIONES, DE IZQUIERDA A DERECHA.
+   No es compatible automáticamente con todos los formularios.
+   ========================================================= */
+
+$('leerOMR').addEventListener('click', async () => {
+  try {
+    if (!imagenCargada) {
+      throw new Error('Primero captura o carga una fotografía.');
+    }
+
+    mostrarMensaje('Analizando la fotografía…');
+
+    await esperarOpenCV();
+
+    const canvas = $('lienzo');
+    const src = cv.imread(canvas);
+    const gris = new cv.Mat();
+    const binario = new cv.Mat();
+    const contornos = new cv.MatVector();
+    const jerarquia = new cv.Mat();
+
+    try {
+      cv.cvtColor(src, gris, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gris, gris, new cv.Size(5, 5), 0);
+
+      cv.threshold(
+        gris,
+        binario,
+        0,
+        255,
+        cv.THRESH_BINARY_INV + cv.THRESH_OTSU
+      );
+
+      cv.findContours(
+        binario,
+        contornos,
+        jerarquia,
+        cv.RETR_LIST,
+        cv.CHAIN_APPROX_SIMPLE
+      );
+
+      const candidatos = [];
+
+      for (let i = 0; i < contornos.size(); i++) {
+        const contorno = contornos.get(i);
+        const area = cv.contourArea(contorno);
+        const perimetro = cv.arcLength(contorno, true);
+
+        if (perimetro <= 0) continue;
+
+        const circularidad =
+          4 * Math.PI * area / (perimetro * perimetro);
+
+        const rect = cv.boundingRect(contorno);
+        const relacion = rect.width / rect.height;
+
+        if (
+          area >= 40 &&
+          circularidad >= 0.65 &&
+          relacion >= 0.70 &&
+          relacion <= 1.30 &&
+          rect.width >= 8 &&
+          rect.height >= 8
+        ) {
+          candidatos.push({
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2,
+            w: rect.width,
+            h: rect.height
+          });
+        }
+      }
+
+      if (candidatos.length < 40) {
+        throw new Error(
+          'No se detectaron suficientes círculos. Candidatos: ' +
+          candidatos.length + '. Mejora la fotografía.'
+        );
+      }
+
+      /*
+        Esta agrupación supone filas horizontales regulares.
+        Las burbujas de una plantilla con otra geometría requieren
+        un algoritmo calibrado para esa plantilla.
+      */
+      candidatos.sort((a, b) => a.y - b.y || a.x - b.x);
+
+      const tolerancia = Math.max(
+        8,
+        promedio(candidatos.map(c => c.h)) * 0.55
+      );
+
+      const grupos = [];
+
+      candidatos.forEach(c => {
+        let grupo = grupos.find(g => Math.abs(g.y - c.y) <= tolerancia);
+
+        if (!grupo) {
+          grupo = { y: c.y, items: [] };
+          grupos.push(grupo);
+        }
+
+        grupo.items.push(c);
+        grupo.y = promedio(grupo.items.map(item => item.y));
+      });
+
+      grupos.sort((a, b) => a.y - b.y);
+
+      const filas = grupos
+        .map(g => g.items.sort((a, b) => a.x - b.x))
+        .filter(g => g.length === 4);
+
+      if (filas.length !== TOTAL_PREGUNTAS) {
+        throw new Error(
+          'El diseño detectado no coincide con 10 filas de 4 burbujas. ' +
+          'Se encontraron ' + filas.length +
+          ' filas compatibles. No se asignaron respuestas automáticamente.'
+        );
+      }
+
+      const respuestas = filas.map(fila => {
+        const porcentajes = fila.map(c => {
+          const radio = Math.max(
+            2,
+            Math.floor(Math.min(c.w, c.h) * 0.22)
+          );
+
+          const x = Math.max(0, Math.floor(c.x - radio));
+          const y = Math.max(0, Math.floor(c.y - radio));
+          const ancho = Math.min(binario.cols - x, radio * 2 + 1);
+          const alto = Math.min(binario.rows - y, radio * 2 + 1);
+
+          if (ancho <= 0 || alto <= 0) return 0;
+
+          const region = binario.roi(
+            new cv.Rect(x, y, ancho, alto)
+          );
+
+          const porcentaje =
+            cv.countNonZero(region) / (ancho * alto);
+
+          region.delete();
+          return porcentaje;
+        });
+
+        const orden = porcentajes
+          .map((valor, indice) => ({ valor, indice }))
+          .sort((a, b) => b.valor - a.valor);
+
+        // No forzar una respuesta si la marca no se distingue claramente.
+        if (
+          orden[0].valor < 0.20 ||
+          orden[0].valor - orden[1].valor < 0.10
+        ) {
+          return '';
+        }
+
+        return OPCIONES[orden[0].indice];
+      });
+
+      establecerRespuestas(respuestas);
+
+      mostrarMensaje(
+        'Lectura automática completada. Verifica cada respuesta en pantalla. ' +
+        'Esta función requiere que la hoja tenga 10 filas con cuatro opciones ' +
+        'horizontales A, B, C y D. No guardes la nota sin revisar.',
+        'exito'
+      );
+    } finally {
+      src.delete();
+      gris.delete();
+      binario.delete();
+      contornos.delete();
+      jerarquia.delete();
+    }
+  } catch (error) {
+    mostrarMensaje(
+      'No se pudo completar la lectura OMR:\n' + error.message,
+      'error'
+    );
+  }
+});
+
+function promedio(valores) {
+  if (!valores.length) return 0;
+  return valores.reduce((a, b) => a + b, 0) / valores.length;
+}
+
+function esperarOpenCV() {
+  return new Promise((resolve, reject) => {
+    const inicio = Date.now();
+
+    const revisar = () => {
+      if (window.cv && cv.Mat && cv.imread) {
+        resolve();
+      } else if (Date.now() - inicio > 30000) {
+        reject(new Error(
+          'OpenCV no cargó. Comprueba tu conexión a Internet.'
+        ));
+      } else {
+        setTimeout(revisar, 250);
+      }
+    };
+
+    revisar();
+  });
+}
+
+/* =========================================================
+   CÁLCULO Y GUARDADO
+   ========================================================= */
+
+$('calcular').addEventListener('click', async () => {
+  try {
+    invalidarCalculo();
+
+    const qr = $('qr').value.trim();
+    if (!qr) {
+      throw new Error('Primero lee el QR o introduce su contenido.');
+    }
+
+    const respuestas = obtenerRespuestas();
+
+    mostrarMensaje('Enviando respuestas para calcular la nota…');
+
+    const resultado = await llamarAPI('calcular', {
+      qr: qr,
+      respuestas: respuestas
+    });
+
+    calculoPendiente = {
+      qr: qr,
+      respuestas: respuestas.slice(),
+      resultado: resultado
+    };
+
+    $('guardar').disabled = false;
+
+    mostrarResultado(resultado, false);
+  } catch (error) {
+    invalidarCalculo();
+    mostrarMensaje('No se pudo calcular la nota:\n' + error.message, 'error');
+  }
+});
+
+$('guardar').addEventListener('click', async () => {
+  if (!calculoPendiente) {
+    mostrarMensaje('Primero debes calcular y revisar la nota.', 'error');
+    return;
+  }
+
+  // Impedir que se guarde un cálculo anterior tras cambiar datos.
+  if (
+    calculoPendiente.qr !== $('qr').value.trim() ||
+    JSON.stringify(calculoPendiente.respuestas) !==
+      JSON.stringify(obtenerRespuestas())
+  ) {
+    invalidarCalculo();
+    mostrarMensaje(
+      'Los datos cambiaron. Vuelve a calcular antes de guardar.',
+      'error'
+    );
+    return;
+  }
+
+  const r = calculoPendiente.resultado;
+
+  const confirmar = confirm(
+    'CONFIRMAR REGISTRO DE NOTA\n\n' +
+    'Estudiante: ' + r.nombre + '\n' +
+    'Curso: ' + r.curso + '\n' +
+    'Examen: ' + r.codigoExamen + '\n' +
+    'Nota: ' + r.nota + '/100\n' +
+    'Columna: ' + r.columna + '\n\n' +
+    '¿Deseas continuar?'
+  );
+
+  if (!confirmar) return;
+
+  try {
+    $('guardar').disabled = true;
+    mostrarMensaje('Guardando nota. No cierres esta página…');
+
+    const guardado = await llamarAPI('guardar', {
+      qr: calculoPendiente.qr,
+      respuestas: calculoPendiente.respuestas
+    });
+
+    calculoPendiente = null;
+    mostrarResultado(guardado, true);
+  } catch (error) {
+    mostrarMensaje(
+      'No se confirmó el guardado:\n' + error.message +
+      '\nVerifica la hoja antes de volver a intentar, para evitar duplicados.',
+      'error'
+    );
+  } finally {
+    $('guardar').disabled = !calculoPendiente;
+  }
+});
+
+function mostrarResultado(r, guardado) {
+  const lineas = [
+    guardado ? 'REGISTRO CONFIRMADO' : 'CÁLCULO PREVIO — NO GUARDADO',
+    '',
+    'Estudiante: ' + (r.nombre || ''),
+    'RUDE: ' + (r.rude || ''),
+    'Curso: ' + (r.curso || ''),
+    'Código del examen: ' + (r.codigoExamen || ''),
+    'Columna: ' + (r.columna || ''),
+    'Respuestas correctas: ' + r.correctas + '/10',
+    'Respuestas incorrectas: ' + r.incorrectas + '/10',
+    'NOTA: ' + r.nota + '/100',
+    '',
+    'DETALLE DE RESPUESTAS'
+  ];
+
+  (r.detalle || []).forEach(d => {
+    lineas.push(
+      'Pregunta ' + d.pregunta +
+      ' | Marcada: ' + d.marcada +
+      ' | Clave: ' + d.correcta +
+      ' | ' + (d.acierto ? 'CORRECTA' : 'INCORRECTA')
+    );
+  });
+
+  if (r.mensaje) {
+    lineas.push('', r.mensaje);
+  }
+
+  mostrarMensaje(lineas.join('\n'), 'exito');
+}
+
+/* =========================================================
+   LIMPIEZA
+   ========================================================= */
+
+$('limpiar').addEventListener('click', () => {
+  if (!confirm('¿Quieres limpiar las 10 respuestas?')) return;
+
+  establecerRespuestas(Array(TOTAL_PREGUNTAS).fill(''));
+  mostrarMensaje('Respuestas limpiadas. El cálculo anterior quedó invalidado.');
+});
+
+window.addEventListener('beforeunload', detenerCamara);
+
+crearSelectores();
+</script>
+</body>
+</html>
